@@ -1,0 +1,16 @@
+﻿  main.c
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Validation\Heap-Standalone-Validation\main.c(29,23): warning C4018: '<': signed/unsigned mismatch
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Validation\Heap-Standalone-Validation\main.c(30,16): warning C4047: '=': 'functionpointer' differs in levels of indirection from 'functionpointer *'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Validation\Heap-Standalone-Validation\main.c(51,12): warning C4477: 'printf' : format string '%08x' requires an argument of type 'unsigned int', but variadic argument 1 has type 'functionpointer'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Validation\Heap-Standalone-Validation\main.c(64,16): warning C4477: 'printf' : format string '%08x' requires an argument of type 'unsigned int', but variadic argument 2 has type 'HANDLE'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Validation\Heap-Standalone-Validation\main.c(71,25): warning C4047: 'function': 'functionpointer *' differs in levels of indirection from 'functionpointer'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Validation\Heap-Standalone-Validation\main.c(71,25): warning C4024: 'fill_array': different types for formal and actual parameter 2
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Validation\Heap-Standalone-Validation\main.c(73,16): warning C4477: 'printf' : format string '%08x' requires an argument of type 'unsigned int', but variadic argument 2 has type 'functionpointer *'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Validation\Heap-Standalone-Validation\main.c(79,12): warning C4477: 'printf' : format string '%08x' requires an argument of type 'unsigned int', but variadic argument 1 has type 'functionpointer'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Validation\Heap-Standalone-Validation\main.c(93,12): warning C4477: 'printf' : format string '%08x' requires an argument of type 'unsigned int', but variadic argument 1 has type 'functionpointer'
+  Generating code
+  1 of 10 functions (10.0%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    0 functions had inline decision re-evaluated but remain unchanged
+  Finished generating code
+  Heap-Standalone-Validation.vcxproj -> D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Validation\Release\Heap-Standalone-Validation.exe

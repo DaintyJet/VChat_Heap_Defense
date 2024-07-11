@@ -1,0 +1,11 @@
+﻿  main.c
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone\Heap-Standalone\main.c(21,23): warning C4018: '<': signed/unsigned mismatch
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone\Heap-Standalone\main.c(22,16): warning C4047: '=': 'functionpointer' differs in levels of indirection from 'functionpointer *'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone\Heap-Standalone\main.c(43,12): warning C4477: 'printf' : format string '%08x' requires an argument of type 'unsigned int', but variadic argument 1 has type 'functionpointer'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone\Heap-Standalone\main.c(56,16): warning C4477: 'printf' : format string '%08x' requires an argument of type 'unsigned int', but variadic argument 2 has type 'HANDLE'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone\Heap-Standalone\main.c(63,25): warning C4047: 'function': 'functionpointer *' differs in levels of indirection from 'functionpointer'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone\Heap-Standalone\main.c(63,25): warning C4024: 'fill_array': different types for formal and actual parameter 2
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone\Heap-Standalone\main.c(65,16): warning C4477: 'printf' : format string '%08x' requires an argument of type 'unsigned int', but variadic argument 2 has type 'functionpointer *'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone\Heap-Standalone\main.c(71,12): warning C4477: 'printf' : format string '%08x' requires an argument of type 'unsigned int', but variadic argument 1 has type 'functionpointer'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone\Heap-Standalone\main.c(85,12): warning C4477: 'printf' : format string '%08x' requires an argument of type 'unsigned int', but variadic argument 1 has type 'functionpointer'
+  Heap-Standalone.vcxproj -> D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone\Debug\Heap-Standalone.exe

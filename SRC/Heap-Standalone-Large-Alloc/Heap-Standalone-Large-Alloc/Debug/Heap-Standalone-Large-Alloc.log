@@ -1,0 +1,14 @@
+﻿  main.c
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Large-Alloc\Heap-Standalone-Large-Alloc\main.c(22,23): warning C4018: '<': signed/unsigned mismatch
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Large-Alloc\Heap-Standalone-Large-Alloc\main.c(23,16): warning C4047: '=': 'functionpointer' differs in levels of indirection from 'functionpointer *'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Large-Alloc\Heap-Standalone-Large-Alloc\main.c(44,12): warning C4477: 'printf' : format string '%08x' requires an argument of type 'unsigned int', but variadic argument 1 has type 'functionpointer'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Large-Alloc\Heap-Standalone-Large-Alloc\main.c(55,38): warning C4047: 'function': 'DWORD' differs in levels of indirection from 'void *'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Large-Alloc\Heap-Standalone-Large-Alloc\main.c(55,38): warning C4024: 'HeapAlloc': different types for formal and actual parameter 2
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Large-Alloc\Heap-Standalone-Large-Alloc\main.c(56,25): warning C4047: 'function': 'functionpointer *' differs in levels of indirection from 'functionpointer'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Large-Alloc\Heap-Standalone-Large-Alloc\main.c(56,25): warning C4024: 'fill_array': different types for formal and actual parameter 2
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Large-Alloc\Heap-Standalone-Large-Alloc\main.c(58,16): warning C4477: 'printf' : format string '%08x' requires an argument of type 'unsigned int', but variadic argument 2 has type 'functionpointer *'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Large-Alloc\Heap-Standalone-Large-Alloc\main.c(65,12): warning C4477: 'printf' : format string '%08x' requires an argument of type 'unsigned int', but variadic argument 1 has type 'functionpointer'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Large-Alloc\Heap-Standalone-Large-Alloc\main.c(71,33): warning C4018: '<': signed/unsigned mismatch
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Large-Alloc\Heap-Standalone-Large-Alloc\main.c(77,12): warning C4477: 'printf' : format string '%08x' requires an argument of type 'unsigned int', but variadic argument 1 has type 'functionpointer'
+D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Large-Alloc\Heap-Standalone-Large-Alloc\main.c(40,12): warning C4101: 'hChunk': unreferenced local variable
+  Heap-Standalone-Large-Alloc.vcxproj -> D:\Fu-Work\VChat\WinExploit-Priv\6-HeapIntegrity\SRC\Heap-Standalone-Large-Alloc\Debug\Heap-Standalone-Large-Alloc.exe
