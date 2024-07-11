@@ -4,26 +4,26 @@
 > Terminates a process when heap corruption is detected. - Microsoft
 
 
-The *Validate Heap Integrity* exploit mitigation in Windows is a system-level mitigation mechanism that is enabled by default on most systems (Windows 11, and Windows Server). This mitigation aims to prevent the exploitation of application specific data which is stored on a heap from being exploited to gain control of the execution of a thread. The implementation of these defenses are a part of the Windows Heap Manager, not the application binary itself. The changes to the Windows Heap Manager not only validate the integrity of the objects allocated onto the heap, but additional restrictions and changes were implemented to ensure the Heap objects and the Heap itself remain in a consistent and valid un-modified state. There are two classes of mitigations applied on the Windows heap; Those that protect the metadata itself, and those that provide non-determinism [2]. We will be focusing on those protections used to protect the metadata stored on the heap.
+The *Validate Heap Integrity* exploit mitigation in Windows is a system-level mitigation mechanism that is enabled by default on most systems (Windows 11, and Windows Server). This mitigation aims to prevent the exploitation of application specific data which is stored on a heap from being exploited to gain control of the execution of a thread. The implementation of these defenses are a part of the Windows Heap Manager, not the application binary itself. The changes to the Windows Heap Manager not only validate the integrity of the objects allocated onto the heap, but additional restrictions and changes were implemented to ensure the Heap objects and the Heap itself remain in a consistent and valid un-modified state. There are two classes of mitigations applied on the Windows heap: Those that protect the metadata itself and those that provide non-determinism [2]. We will be focusing on those protections used to protect the metadata stored on the heap.
 ## Windows Heap Structure
 > [!NOTE]
 > Additional details can be found in the Writeup [Heap-Overflow-Example](https://github.com/DaintyJet/Heap-Overflow-Example).
 
-The structure of a heap in the Windows operating system follows that of most modern systems. That is, when we make a call with the `malloc(...)` or the Windows specific `HeapAlloc(...)` functions we will be returned an address that points to data contained in a *heap chunk*. The allocation of a *heap chunk* depends on a number of factors, but it should be noted that the chunk we were allocated was either allocated as a whole to us, or was once a part of a larger chunk which has been fragmented to create a smaller series of *heap chunks* for our use. Generally a heap manager such as the one used in Windows will apply various strategies to limit the fragmentation of the heap - these strategies are often guided by *heuristics*.
+The structure of a heap in the Windows operating system follows that of most modern systems. That is, when we make a call with the `malloc(...)` or the Windows-specific `HeapAlloc(...)` functions, we will be returned an address that points to data contained in a *heap chunk*. The allocation of a *heap chunk* depends on a number of factors, but it should be noted that the chunk we were allocated was either allocated as a whole to us, or was once a part of a larger chunk which has been fragmented to create a smaller series of *heap chunks* for our use. Generally a heap manager such as the one used in Windows will apply various strategies to limit the fragmentation of the heap - these strategies are often guided by *heuristics*.
 
-The Windows heap manager is separated into a *Front-End* and a *Back-End*, We first interact with the Back-End allocator by default until our operations trigger the heuristics and we are switched to use the Front-End allocator. Specifically once we make 18 or more allocations of the same size (*Less than 16kb each*) we will be switched over to the Front-End allocator which is commonly called a *Low Fragmentation Heap* (LFH) whose allocations are a part of a large heap chunk allocated to the Front-End by the Back-End allocator. This chunk is then made into a seres of smaller blocks managed by the Front-End allocator, these smaller blocks are organized into *buckets* and those blocks in the bucket are not assigned in a linear fashion and their addresses may not be contiguous in nature so it is much harder to predict where or if there will be adjacent blocks allocated to our program. Exploits utilizing the the Windows heap therefore try to avoid triggering the LFH as they want to reliably overflow or access an *adjacent chunk* to the one they control.
+The Windows heap manager is separated into a *Front-End* and a *Back-End*, We first interact with the Back-End allocator by default until our operations trigger the heuristics and we are switched to use the Front-End allocator. Specifically, once we make 18 or more allocations of the same size (*Less than 16kb each*) we will be switched over to the Front-End allocator which is commonly called a *Low Fragmentation Heap* (LFH) whose allocations are a part of a large heap chunk allocated to the Front-End by the Back-End allocator. This chunk is then made into a seres of smaller blocks managed by the Front-End allocator, these smaller blocks are organized into *buckets* and those blocks in the bucket are not assigned in a linear fashion and their addresses may not be contiguous in nature so it is much harder to predict where or if there will be adjacent blocks allocated to our program. Exploits utilizing the Windows heap, therefore, try to avoid triggering the LFH as they want to reliably overflow or access an *adjacent chunk* to the one they control.
 
 The metadata of a heap chunk is used by the heap manager during the normal management operations on the heap - one notable use is during a `free(...)` operation where adjacent chunks may be coalesced to reduce fragmentation. We are not particularly concerned with the contents of the metadata in the heap chunk, but we do need to keep in mind this header is stored on the heap at the head of it's associated data chunk.
 
 > [!NOTE]
-> Numerous historical attacks involved modifying the heap chunk's metadata to corrupt process information such as the addresses stored in the global offset table when heap operations would be done of the corrupted chunk. Most of these attacks have been mitigated by protections discussed in later sections.
+> Numerous historical attacks involved modifying the heap chunk's metadata to corrupt process information, such as the addresses stored in the global offset table when heap operations would be done on the corrupted chunk. Most of these attacks have been mitigated by protections discussed in later sections.
 
 Below we can see an illustration of the Windows Heap's free list:
 
 <img src="Images/Heap-List.png">
 
-* `F-Link` (Flink): This is a pointer to the next entry on the free list. In the case this is a member of the *FreeLists*/*ListHints* object this is a pointer to the first element on the free list [3].
-* `B-Link` (Blink): THis is a pointer the previous entry on the free list. If this is a member of the *FreeLists*/*ListHints* object this is used to determine if the LFH is active, or should be activated acting as a counter before activation and once activated will consist of a pointer to the `_HEAP_BUCKET` used in LFH allocations.
+* `F-Link` (Flink): This is a pointer to the next entry on the free list. In the case this is a member of the *FreeLists*/*ListHints* object, this is a pointer to the first element on the free list [3].
+* `B-Link` (Blink): This is a pointer to the previous entry on the free list. If this is a member of the *FreeLists*/*ListHints* object, this is used to determine if the LFH is active or should be activated, acting as a counter before activation and, once activated, will consist of a pointer to the `_HEAP_BUCKET` used in LFH, allocations.
 * `Data`: The Chunk's data.
 
 We can examine a `_HEAP_ENTRY` object that would be located on the heap using the command `dt _HEAP_ENTRY` in [WinDBG](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/). In Windows 11 it has the following structure:
@@ -54,8 +54,8 @@ ntdll!_HEAP_ENTRY
    +0x000 AgregateCode     : Uint8B
 ```
 > ![IMPORTANT]
-> This structure is 8-bytes in size. And is prepended to all data entries on the heap. This means in order to overwrite the data section of a heap chunk, this needs to be overwritten.
-* `Size`: Size of the chunk in terms of the number of blocks including the `_HEAP_ENTRY` that are required to store the data. 
+> This structure is 8 bytes in size and is prepended to all data entries on the heap. This means in order to overwrite the data section of a heap chunk, this needs to be overwritten.
+* `Size`: Size of the chunk in terms of the number of blocks, including the `_HEAP_ENTRY` that are required to store the data. 
 * `Flags`: Flags used to denote the state of the chunk, examples include *Free* and *Busy*.
 * `SmallTagIndex`: This stores the checksum of the heap entry, consisting of the XOR'ed value of the first three bytes of the `_HEAP_ENTRY` 
 * `SubSegmentCode`: Contains information on the Sub-Section this may be a part of. 
@@ -63,7 +63,7 @@ ntdll!_HEAP_ENTRY
 * `SegmentOffset`: Contains Segment Offset.
 * `LFHFlags`: Flags used to control the Low Fragmentation Heap. 
 * `UnusedBytes`: Used to store unused bytes. Also used when LFH is activated.
-* `FunctionIndex`: Contains management information used by the Windows heap manager. <!--  Supposedly it contains a function pointer/Index so the manager can preform specific operations on the heap-->
+* `FunctionIndex`: Contains management information used by the Windows heap manager. <!--  Supposedly, it contains a function pointer/Index so the manager can perform specific operations on the heap-->
 * `ContextValue`: Contains management information used by the Windows heap manager.
 * `InterceptorValue`: Contains management information used by the Windows heap manager. This is used for additional information and can be used for debugging purposes. 
 * `UnusedBytesLength`: Length in terms of the number of blocks that are unused in the current allocation.
@@ -78,11 +78,11 @@ This means we will have a Heap with the following (simplified) structure of entr
 <img src="Images/Heap-Example.png">
 
 > [!NOTE]
-> The entries in the heap may or may not be adjacent. Additionally they may not be arranged in a liner order if multiple allocations are made in a row if this is executing in a multithreaded process.
+> The entries in the heap may or may not be adjacent. Additionally, they may not be arranged in a linear order if multiple allocations are made in a row if this is executing in a multithreaded process.
 >
-> If we are going to overflow a heap chunk to overwrite one that is adjacent to it, we will need to overflow that chunk's `_HEAP_ENTRY` structure which contains the *checksum* that is in the *SmallTagIndex*.
+> If we are going to overflow a heap chunk to overwrite one that is adjacent to it, we will need to overflow that chunk's `_HEAP_ENTRY` structure, which contains the *checksum* that is in the *SmallTagIndex*.
 ## Windows Heap Corruption Mitigation Strategies
-Windows has made a number of modifications to the `_HEAP_CHUNK` structure to enable the Windows Operating System to prevent and detect when entries on the heap have been corrupted. Additionally Windows has implemented some limitations to possible operations on the heap.
+Windows has made a number of modifications to the `_HEAP_CHUNK` structure to enable the Windows Operating System to prevent and detect when entries on the heap have been corrupted. Additionally, Windows has implemented some limitations to possible operations on the heap.
 
 > [!IMPORTANT]
 > The following lists are based on two Windows security blog releases [1] and [2]
@@ -90,24 +90,24 @@ Windows has made a number of modifications to the `_HEAP_CHUNK` structure to ena
 The first modifications we will discuss are the behavioral changes made to Windows in order to prevent the heap from being placed into an invalid state.
 * `Heap Handle Freeing`: Starting in Windows 8, the handle to the heap structure can no longer be freed from memory. This is to prevent attacks where the attacker would free the heap handle, and would re-allocate this memory to a structure they controlled in order to corrupt the internal metadata and gain control over the executable.
 * `Busy Status Validation`: Starting in Windows 8, the heap manager will verify that a block is *not busy* (un-allocated) before allocating it. If the block is busy the process will be terminated. This is to prevent attacks where an in-use block is corrupted in order to gain control over the flow of execution. For example the attacker could replace a C++ object and it's function pointers or virtual function pointers.
-* `LFH Allocation Behavior`: Starting in Windows 8, the allocation order of the *Low Fragmentation Heap* has been randomized. It no longer will allocate block linearly so it is difficult to grantee if blocks will be allocated adjacent to one another allowing overflows and overwrites. The randomization is *specific and limited* to the LFH subsegments.
+* `LFH Allocation Behavior`: Starting in Windows 8, the allocation order of the *Low Fragmentation Heap* has been randomized. It no longer allocates blocks linearly, so it is difficult to guarantee that blocks will be allocated adjacent to one another, allowing overflows and overwrites. The randomization is *specific and limited* to the LFH subsegments.
 * `Exception Handling`: Starting in Windows 8 they removed a *Catch-All* exception handler in heap management functions. These *Catch-All* exception blocks made it so certain exceptions raised during the execution of heap operations would not be fatal to the program and it would recover and continue execution. This made it so attackers would have multiple attempts at exploiting the Windows heap functionality.
 * `HEAP Base Address`: Starting in Windows Vista and Server 2008, the base address of a heap can be randomized if the executable is marked as ASLR compatible.
-* `Action on Heap Corruption`: Starting in Windows Vista and Server 2008, when a heap data structure is corrupted in any way and this is detected the process will be terminated.
+* `Action on Heap Corruption`: Starting in Windows Vista and Server 2008, when a heap data structure is corrupted in any way and this is detected, the process will be terminated.
 * `Allocation Algorithms`: Starting in Windows Vista and Server 2008, the algorithms used to preform heap allocations would shift depending on the allocation type and policy associated. This would make allocations less deterministic due to the variations in algorithms used making exploitation more difficult.
 
-In addition to behavioral changes, Windows also preforms a number of modifications to the data structures and heap functions in order to detect when a heap data structure has been corrupted.
-* `Removal of Data structures`: Starting in Windows Vista and Server 2008, commonly targeted data structures such as the *Lookaside List* have been removed or replaced.
-* `Heap Cookie`: Starting in Windows XP and Server 2003, each heap entry (*_HEAP_ENTRY*) header had a 8-bit random value that would be validated when the heap entry is freed.
+In addition to behavioral changes, Windows also performs a number of modifications to the data structures and heap functions in order to detect when a heap data structure has been corrupted.
+* `Removal of Data Structures`: Starting in Windows Vista and Server 2008, commonly targeted data structures such as the *Lookaside List* have been removed or replaced.
+* `Heap Cookie`: Starting in Windows XP and Server 2003, each heap entry (*_HEAP_ENTRY*) header had an 8-bit random value that would be validated when the heap entry is freed.
   * `Expanded Validation`: Starting in Windows Vista and Server 2008, the aforementioned heap cookie would be validated during most heap operations on the entry rather than just when it was freed.
 * `Metadata Randomization`: Starting in Windows Vista and Server 2008, the header of each heap entry (*_HEAP_ENTRY*) is XOR'ed with a random value so during each heap operation the integrity of the header can be confirmed. 
-* `Function Pointer Encoding`: Starting in Windows Vista and Server 2008, Any function pointer contained within a heap datastructure would have it's address encoded to later be decoded when used. The original value would be encoded with a *random value* to prevent the original value from being replaced.
+* `Function Pointer Encoding`: Starting in Windows Vista and Server 2008, Any function pointer contained within a heap data structure would have it's address encoded to later be decoded when used. The original value would be encoded with a *random value* to prevent the original value from being replaced.
   * `CommitRoutine Global Key`: Starting in Windows 8, the key-value used to encode the *CommitRoutine* function pointer was moved outside of the heap handle data structure.
-* `Unlinking`: Starting in Windows XP and Server 2003, The list entry in an already freed heap chunk is verified to be a valid entry in the doubly linked list. This is because when we free an object allocated on the heap it will be placed back onto the free list, and we may need to coalesce adjacent free chunks *unlinking* them from the free list. Attackers would use this behavior to preform arbitrary writes.
-* `Extended Block Header Validation`: Starting in Windows 8, the Extended Block Header which contains additional metadata associated with the heap chunk would be validated with with additional checks. Before this attacker would be able to make the heap manager free additional in-use blocks by modifying the exiting header to think it had an extended block header even if it did not and applying the appropriate values.
+* `Unlinking`: Starting in Windows XP and Server 2003, The list entry in an already freed heap chunk is verified to be a valid entry in the doubly linked list. This is because when we free an object allocated on the heap it will be placed back onto the free list, and we may need to coalesce adjacent free chunks *unlinking* them from the free list. Attackers would use this behavior to perform arbitrary writes.
+* `Extended Block Header Validation`: Starting in Windows 8, the Extended Block Header, which contains additional metadata associated with the heap chunk, would be validated with additional checks. Before this, an attacker would be able to make the heap manager free additional in-use blocks by modifying the exiting header to think it had an extended block header even if it did not and applying the appropriate values.
 * `LFH Structure Member Encoding`: Starting in Windows 8, the *FirstAllocationOffset* and *BlockStride* members used by the *Low Fragmentation Heap* are encoded. This is because attackers would be able to modify them to make the LFH return an address outside of the region of memory the LFH had been allocated on the heap. This allowed attackers to potentially corrupt other structures and data located on the heap.
 * `Guard Pages`: Starting in Windows 8, *guard pages* which cannot be written to or read from are allocated onto the heap between various regions. This partitioning of the heap prevents overflows from reading or writing to regions beyond the *guard page*. **Ideally** each and every allocation would be wrapped in guard pages however this is not feasible in a real system at this time. Below are the summarized cases where a guard page is deployed.
-  * `Large Allocations`: Allocations of a large enough size will have have a trailing guard page allocated in memory. This will be done for allocations larger than 512 Kb on a 32-bit system or 1 Mb on a 64-bit system.
+  * `Large Allocations`: Allocations of a large enough size will have a trailing guard page allocated in memory. This will be done for allocations larger than 512 Kb on a 32-bit system or 1 Mb on a 64-bit system.
   * `Heap Segments`: A trailing guard page will be allocated for all heap segments.
   * `Maximally Sized Subsegments`: A heap segment may contain one or more subsegments used by the LFH, after a threshold is triggered *maximally sized subsegments* will be allocated to the LFH containing the maximum number of blocks for a given size. Each *maximally sized subsegment* will have a trailing guard page allocated.
 
@@ -117,25 +117,25 @@ In addition to behavioral changes, Windows also preforms a number of modificatio
 This setting in the Windows Operating System controls some of the strategies discussed previously in the [Windows Heap Corruption Mitigation Strategies](#windows-heap-corruption-mitigations-strategies) section. It should be noted that it **does not** control all of the protections Windows implements! The majority of the aforementioned protections are enabled by default and are not immediately available to the user for configuration. Below are the mitigation controller by the *Validate Heap Integrity* option as described in [4] the *Exploit Protection Reference* from Windows.
 
 > [!NOTE]
-> One notable statement in the Exploit Protection Reference is "The validate heap integrity mitigation increases the protection level of heap mitigation in Windows, by causing the application to terminate if a heap corruption is detected." [4]. However it should be noted even if you have this disabled in Windows 11, if one of the other mitigation techniques detects a corruption in the heap, such as when freeing an object that had it's heap metadata corrupted the program will be terminated.
+> One notable statement in the Exploit Protection Reference is "The validate heap integrity mitigation increases the protection level of heap mitigation in Windows, by causing the application to terminate if a heap corruption is detected." [4]. However, it should be noted even if you have this disabled in Windows 11, if one of the other mitigation techniques detects a corruption in the heap, such as when freeing an object that had its heap metadata corrupted, the program will be terminated.
 
 
 * `Heap Handle Freeing`: Starting in Windows 8, the handle to the heap structure can no longer be freed from memory. This is to prevent attacks where the attacker would free the heap handle, and would re-allocate this memory to a structure they controlled to corrupt the internal metadata to gain control over the executable.
 * `Extended Block Header Validation`: Starting in Windows 8, the Extended Block Header which contains additional metadata associated with the heap chunk would be validated with with additional checks. Before this attacker would be able to make the heap manager free additional in-use blocks by modifying the exiting header to think it had an extended block header even if it did not and applying the appropriate values.
-* `Busy Status Validation`: Starting in Windows 8, the heap manager will verify a block is not busy before allocating it. If the block is busy the process will be terminated. This is to prevent attacks where an in-use block is corrupted in order to gain control over the flow of execution. For example the attacker could replace a C++ object and it's function pointers or virtual function pointers.
+* `Busy Status Validation`: Starting in Windows 8, the heap manager will verify a block is not busy before allocating it. If the block is busy the process will be terminated. This is to prevent attacks where an in-use block is corrupted in order to gain control over the flow of execution. For example, the attacker could replace a C++ object and its function pointers or virtual function pointers.
 * `Guard Pages`: Starting in Windows 8, *guard pages* which cannot be written to or read from are allocated onto the heap between various regions. This partitioning on the heap prevents overflows from reading or writing to regions beyond the *guard page*. **Ideally** each and every allocation would be wrapped in guard pages however this is not feasible in a real system at this time. Below are the summarized cases where a guard page is used.
-  * `Large Allocations`: Allocations of a large enough size will have have a trailing guard page allocated in memory. This will be done for allocations larger than 512 Kb on a 32-bit system or 1 Mb on a 64-bit system.
+  * `Large Allocations`: Allocations of a large enough size will have a trailing guard page allocated in memory. This will be done for allocations larger than 512 Kb on a 32-bit system or 1 Mb on a 64-bit system.
   * `Heap Segments`: A trailing guard page will be allocated for all heap segments.
   * `Maximally Sized Subsegments`: A heap segment may contain one or more subsegments used by the LFH, after a threshold is triggered *maximally sized subsegments* will be allocated to the LFH containing the maximum number of blocks for a given size. Each *maximally sized subsegment* will have a trailing guard page allocated.
 
 
 > [!IMPORTANT]
-> Based on current experiences in Windows 11, it appears as though a heap block is always validated when attempting to free the allocation. As stated in the next section [Windows Validate Heap Integrity Option](#windows-validate-heap-integrity-option), the *Validate Heap Integrity* option does not seem to control all of the discussed mitigation strategies. Additionally it is not entirely clear based on the reference if it contains all the strategies it does control as they say "The mitigations include", which means they may not be listing all the techniques the *Validate Heap Integrity* option controls.
+> Based on current experiences in Windows 11, it appears as though a heap block is always validated when attempting to free the allocation. As stated in the next section [Windows Validate Heap Integrity Option](#windows-validate-heap-integrity-option), the *Validate Heap Integrity* option does not seem to control all of the discussed mitigation strategies. Additionally, it is not entirely clear based on the reference if it contains all the strategies it does control as they say "The mitigations include", which means they may not be listing all the techniques the *Validate Heap Integrity* option controls.
 ## Modifying Heap Validation Protections
 As heap validation is a system-wide setting, and does pose much risk to existing binaries if enabled as it affects the heap manager which is opaque to the user-space programs this does not contain the same opt-in or opt-out options as ASLR or CFG. We can enable or disable heap validation using with Windows Security Settings as shown below.
 
 > [!NOTE]
-> Per the Exploit Protection Reference [4], the programs most at-risk to have fatal errors and compatibility issues when the *Validate Heap Integrity* mitigation is enabled at those compiled for a Windows-XP system. Though Microsoft says these issues are rare.
+> Per the Exploit Protection Reference [4], the programs most at-risk of having fatal errors and compatibility issues when the *Validate Heap Integrity* mitigation is enabled at those compiled for a Windows-XP system. Though Microsoft says, these issues are rare.
 
 
 1. Open Windows Settings.
@@ -159,7 +159,7 @@ As heap validation is a system-wide setting, and does pose much risk to existing
     <img src="Images/EH5.png">
 
 ## Heap Exploration: Standalone Program
-This section will use a standalone program similar to the one used in the Writeup [Heap-Overflow-Example](https://github.com/DaintyJet/Heap-Overflow-Example), but it has been modified to be purely `C` rather than a `C++` program. Additionally this has been modified to be a Visual Studio Project. Although we will primarily be running the executable as a standalone program or attached to a debugger like [WinDBG](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/), you can also use [Immunity Debugger](https://www.immunityinc.com/products/debugger/) though the resources for using WinDBG are more easily accessible compared to some of the more limited [resources for Immunity Debugger](https://www.immunityinc.com/downloads/IntelligentDebugging.pdf).
+This section will use a standalone program similar to the one used in the Writeup [Heap-Overflow-Example](https://github.com/DaintyJet/Heap-Overflow-Example), but it has been modified to be purely `C` rather than a `C++` program. Additionally this has been modified to be a Visual Studio Project. Although we will primarily be running the executable as a standalone program or attached to a debugger like [WinDBG](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/), you can also use [Immunity Debugger](https://www.immunityinc.com/products/debugger/). However, the resources for using WinDBG are more easily accessible compared to some of the more limited [resources for Immunity Debugger](https://www.immunityinc.com/downloads/IntelligentDebugging.pdf).
 
 
 We will first examine the behavior of the standalone program when *Validate Heap Integrity* has been **disabled** on the system. This should give us a baseline in terms of expected behavior from a executable.
@@ -195,7 +195,7 @@ We will first examine the behavior of the standalone program when *Validate Heap
 
         <img src="Images/SA1.png">
 
-6. Observe where the the additional objects (function pointer arrays) are allocated onto the heap.
+6. Observe where the additional objects (function pointer arrays) are allocated onto the heap.
     ```c
     // Various Heap Allocations
     for (int i = 0; i < ALLOC_COUNT; ++i) {
@@ -205,7 +205,7 @@ We will first examine the behavior of the standalone program when *Validate Heap
         printf("vector alloc %d: 0x%08x\n", i, v_n);
     }
     ```
-    * As out allocSize is set to 40, we will need a 320 byte chunk on the heap for each of our allocations to succeed, which means one of allocations will fit onto the heap in the region of the previously freed chunk which was 400 bytes.
+    * As our allocSize is set to 40, we will need a 320-byte chunk on the heap for each of our allocations to succeed, which means one of allocations will fit onto the heap in the region of the previously freed chunk which was 400 bytes.
     * In this case the first allocation is the one which will most likely be placed into the hole we previously created in the heap.
     * Each array is filled with pointers to the `nicecode` which is stored in the `obj` pointer using the `fill_array` utility function declared elsewhere.
 7. Observe where the Heap Overflow occurs.
@@ -216,11 +216,11 @@ We will first examine the behavior of the standalone program when *Validate Heap
     ```
     * We first create the string we will overflow the heap chunk with.
     * We then copy that into the heap chunk at `allocations[5]` which should be adjacent to the `v1` functionpointer array which was allocated into the chunk that was made available when `allocations[6]` we freed.
-8. Compile the Project. You can use one of the options in Build dropdown as shown below or the `Ctl + B` keybind.
+8. Compile the Project. You can use one of the options in *Build* dropdown as shown below or the `Ctl + B` keybind.
 
     <img src="Images/SA2.png">
 
-9. Run the Project a few times. This should most of the time produce the following output. Occasionally the program will fail due to corrupting internal heap structures.
+9. Run the Project a few times. This should most of the time, produce the following output. Occasionally the program will fail due to corrupting internal heap structures.
 
     <video controls src="Videos/Stand-1.mp4" title="Title"></video>
 
@@ -229,7 +229,7 @@ We will first examine the behavior of the standalone program when *Validate Heap
         <img src="Images/SA3.png">
 
 10. **Enable** *Validate Heap Integrity* as shown in previous section [Modifying Heap Validation Protections](#modifying-heap-validation-protections).
-11. Compile the Project. You can use one of the options in Build dropdown as shown below or the `Ctl + B` keybind.
+11. Compile the Project. You can use one of the options in *Build* dropdown as shown below or the `Ctl + B` keybind.
 
     <img src="Images/SA2.png">
 
@@ -237,18 +237,18 @@ We will first examine the behavior of the standalone program when *Validate Heap
 
     <img src="Images/SA4.png">
 
-This behavior may seem odd at first, as we have enabled the *Validate Heap Integrity* configuration for the system, and there are no apparent flags to control this on a per-process basis during the building of our project (There are options like Microsoft Defender Configurations for enterprise systems that can achieve this granular approach). However this is behaving as expected for the following reasons:
+This behavior may seem odd at first, as we have enabled the *Validate Heap Integrity* configuration for the system, and there are no apparent flags to control this on a per-process basis during the building of our project (There are options like Microsoft Defender Configurations for enterprise systems that can achieve this granular approach). However, this is behaving as expected for the following reasons:
 
 
-Guard Pages are only inserted after large allocations, or between heap segments as discussed in [Windows Heap Corruption Mitigation Strategies](#windows-heap-corruption-mitigation-strategies). Windows does not insert guard pages for each heap allocation primarily due to performance concerns. Generally each memory page will be 4-Kilobytes, though you may find systems with 2-Kilobyte or 8-Kilobyte pages. Due to the methods used to handle virtual memory, the granularity of protections we can apply are on a per-page basis. This means if we wanted to allocate a non-writable and non-readable region of memory between each heap object to prevent overflows from successfully corrupting data, we would need to allocate 1 page for the heap object and an additional page that is non-readable and non-writable. This means, rather than partitioning a page to support many heap allocations, we could be waisting a large amount of memory; for example if we were to allocate a single `char` that is one byte on the heap, with this strategy we would be waisting 99% of the page the heap chunk for the `char` is located in, and we would be allocating 8-Kilobytes (2 pages) for a single `char`. 
+Guard Pages are only inserted after large allocations or between heap segments, as discussed in [Windows Heap Corruption Mitigation Strategies](#windows-heap-corruption-mitigation-strategies). Windows does not insert guard pages for each heap allocation primarily due to performance concerns. Generally, each memory page will be 4-Kilobytes, though you may find systems with 2-Kilobyte or 8-Kilobyte pages. Due to the methods used to handle virtual memory, the granularity of protections we can apply is on a per-page basis. This means if we wanted to allocate a non-writable and non-readable region of memory between each heap object to prevent overflows from successfully corrupting data, we would need to allocate 1 page for the heap object and an additional page that is non-readable and non-writable. This means, rather than partitioning a page to support many heap allocations, we could be wasting a large amount of memory; for example, if we were to allocate a single `char` that is one byte on the heap, with this strategy we would be waisting 99% of the page the heap chunk for the `char` is located in, and we would be allocating 8-Kilobytes (2 pages) for a single `char`. 
 
-Validation occurs when we perform operations on a heap chunk, not when we are preforming operations on the data contained within a heap chunk. This has to do with the C compiler and how Windows can apply this protection to all processes regardless of when their executable was compiled. First let's look at the assembly of the function call using an address stored on the heap:
+Validation occurs when we perform operations on a heap chunk, not when we are performing operations on the data contained within a heap chunk. This has to do with the C compiler and how Windows can apply this protection to all processes regardless of when their executable was compiled. First, let's look at the assembly of the function call using an address stored on the heap:
 
 1. Set a breakpoint at the first function call, and click run.
 
     <img src="Images/SA5.png">
 
-2. Right click the function call and select *Go To Disassembly*
+2. Right-click the function call and select *Go To Disassembly*
 
     <img src="Images/SA6.png">
 
@@ -266,22 +266,22 @@ Validation occurs when we perform operations on a heap chunk, not when we are pr
     00ED1CAD  add         esp,4
     ```
 
-We can see we start off by loading the argument *arg* onto the stack with a `mov eax,dword ptr [arg]` followed by a `push eax`, after this we calculate the offsets required to access the appropriate array of function pointers. Since the *v_allocs* array is also an array of pointer, and we are generating a 32-bit executable the pointer values are 4-bytes in size, and we first calculate the offset in *v_allocs* with `mov ecx,4` to load the size of the pointer and `imul edx,ecx,0` to calculate the offset (0). We do the same to calculate the offset within the array of function pointers, but instead of saving the result to `edx` as done previously we save it to `ecx`. Then we load the address of the function into `eax` to preform the function call, first we load the address of the array of function pointers into `edx` with the instruction `mov edx,dword ptr v_allocs[edx]` then we offset this with the offset we calculated earlier to determine the function in the array we are calling with the instruction `mov eax,dword ptr [edx+ecx]`. Finally we call the target function who's address is stored in `eax` with the instruction `call eax` and clean up the argument on the stack when it returns with `add esp,4`. **Notice** how at no point do we preform a call to a function that can validate the integrity of the heap! We preform a function call as we would for any other function pointer or external function, this is because the compiler does not track allocations that were preformed by `malloc(...)`, `HeapAlloc(...)` or an alternative function to preform memory allocations. This means the compiler also does not apply any special checks to call functions used to validate the integrity of a heap chunk before we use the information contained within. **Additionally** the current checks implemented to validate the integrity of the heap are preformed in the memory management functions provided by Windows, this probably for a number of reasons. The first and most apparent is operations on heap objects is critical and requires the heap data-structures and metadata be valid and not under the control of an attacker. The other reason is this approach only modifies the memory management functions, and as long as a program utilizes a *DLL` and is dynamically linked then they will benefit from the additional validation checks when heap operations are preformed regardless of when they were compiled.
+We can see we start off by loading the argument *arg* onto the stack with a `mov eax,dword ptr [arg]` followed by a `push eax`, after this we calculate the offsets required to access the appropriate array of function pointers. Since the *v_allocs* array is also an array of pointer, and we are generating a 32-bit executable the pointer values are 4-bytes in size, and we first calculate the offset in *v_allocs* with `mov ecx,4` to load the size of the pointer and `imul edx,ecx,0` to calculate the offset (0). We do the same to calculate the offset within the array of function pointers, but instead of saving the result to `edx` as done previously we save it to `ecx`. Then we load the address of the function into `eax` to preform the function call, first we load the address of the array of function pointers into `edx` with the instruction `mov edx,dword ptr v_allocs[edx]` then we offset this with the offset we calculated earlier to determine the function in the array we are calling with the instruction `mov eax,dword ptr [edx+ecx]`. Finally we call the target function who's address is stored in `eax` with the instruction `call eax` and clean up the argument on the stack when it returns with `add esp,4`. **Notice** how at no point do we perform a call to a function that can validate the integrity of the heap! We preform a function call as we would for any other function pointer or external function, this is because the compiler does not track allocations that were preformed by `malloc(...)`, `HeapAlloc(...)` or an alternative function to preform memory allocations. This means the compiler also does not apply any special checks to call functions used to validate the integrity of a heap chunk before we use the information contained within. **Additionally** the current checks implemented to validate the integrity of the heap are preformed in the memory management functions provided by Windows, this probably for a number of reasons. The first and most apparent is operations on heap objects are critical and require the heap data structures and metadata to be valid and not under the control of an attacker. The other reason is this approach only modifies the memory management functions, and as long as a program utilizes a *DLL` and is dynamically linked, then it will benefit from the additional validation checks when heap operations are performed regardless of when they were compiled.
 
 Finally, this is an idealized exploit... There are many heap exploits that have been defeated by the Validate Heap Integrity option and all of the additional mitigation Windows has implemented over the years. From attacks like exploiting a [Vectored Exception Handler](https://learn.microsoft.com/en-us/windows/win32/debug/vectored-exception-handling) stored on the heap, modifying heap chunk's metadata while it is on the free list to gain control over the flow of execution, double free attacks and many others!
 
 
 > [!NOTE]
-> As this exploit overwrites a function pointer, if we enable Control Flow Guard discussed previously in [VChat_CFG](https://github.com/DaintyJet/VChat_CFG) then this exploit would be mitigated.
+> As this exploit overwrites a function pointer, if we enable the Control Flow Guard mitigation discussed previously in [VChat_CFG](https://github.com/DaintyJet/VChat_CFG), then this exploit would be mitigated.
 
 ## Heap Exploitation: Heap Standalone Large Alloc
 In this section we will be using another slightly modified program [Heap-Standalone-Large-Alloc](./SRC/Heap-Standalone-Large-Alloc/Heap-Standalone-Large-Alloc.sln), with this program we will explore how large allocations on the heap, in this case with a 32-bit program that means allocations larger than 512-Kilobytes are handled and what protections are provided. Namely we will be examining the *Guard Pages* inserted by the Windows heap manger when performing these allocations. The code was simplified for this demonstration, omitting the freeing and reallocation of data and instead attempts to directly overflow adjacent blocks.
 
 
 > [!IMPORTANT]
-> When viewing allocations on the Heap we will be able to see the size of the region they occupy. However there may appear to be a difference the requested size and the region actually allocated by the request. This is primarily due to memory alignment criteria, be that within the heap or on a page-sized basis for virtual memory.
+> When viewing allocations on the Heap we will be able to see the size of the region they occupy. However, there may appear to be a difference between the requested size and the region actually allocated by the request. This is primarily due to memory alignment criteria, be that within the heap or on a page-sized basis for virtual memory.
 >
-> Additionally if we view page sizes, a 4-kB page is 4096 bytes not 4000 bytes. This is because they are calculated in terms of Kibibytes (1024 bits) rather than Kilobytes (1000 bits) we as consumers generally use.
+> Additionally, if we view page sizes, a 4-kB page is 4096 bytes, not 4000 bytes. This is because they are calculated in terms of Kibibytes (1024 bits) rather than Kilobytes (1000 bits), which we as consumers generally use.
 
 
 1. Open the [Heap-Standalone-Large-Alloc](./SRC/Heap-Standalone-Large-Alloc/Heap-Standalone-Large-Alloc.sln) and compile the executable.
@@ -314,7 +314,7 @@ In this section we will be using another slightly modified program [Heap-Standal
 
     <img src="Images/SAL1.png">
 
-6. For simplicity, open the source file so you can easily st breakpoints and see where in the code's execution we are.
+6. For simplicity, open the source file so you can easily set breakpoints and see where in the code's execution we are.
 
     <img src="Images/SAL2.png">
 
@@ -335,7 +335,7 @@ In this section we will be using another slightly modified program [Heap-Standal
     <img src="Images/SAL5.png">
 
    * `Base Address`: Starting address of region of memory - pages of memory.
-   * `End Address`: This is the address the current set of pages ends.
+   * `End Address`: This is the address where the current set of pages ends.
    * `Region Size`: Size of the region (kB is Kibibytes - 1024 bytes)
    * `Region State`: State of the pages in this region of memory
      * `Committed`: Memory region that has been allocated and is present in physical storage - RAM memory or on disk represented in the paging memory.
@@ -355,7 +355,7 @@ In this section we will be using another slightly modified program [Heap-Standal
     <img src="Images/SAL7.png">
 
     * Notice the error message!
-13. Now using the *End Address* from the previous `!address <HeapChunk>` to view the end of the heap chunk in the *Memory View*.
+13. Now use the *End Address* value from the previous `!address <HeapChunk>` command's output to view the end of the heap chunk in the *Memory View*.
 
     <img src="Images/SAL8.png">
 
@@ -368,7 +368,7 @@ In this section we will be using another slightly modified program [Heap-Standal
       * `Region Size`: Notice how this is on 4-kB. As this is the size of a page on my systems this is just 1 page.
       * `Region State`: Notice how this is *Reserved* this means it is not loaded in physical. memory. If we try to access or modify this region an exception will be thrown.
       * `Protect`: Is not present due to not being *Committed*.
-13. Using the `!vprot <address>` print our the protection characteristics of the *Ending Address* region of the heap chunk.
+13. Using the `!vprot <address>` print out the protection characteristics of the *Ending Address* region of the heap chunk.
 
     <img src="Images/SAL10.png">
 
@@ -387,7 +387,7 @@ In this section we will be using another slightly modified program [Heap-Standal
 
         <img src="Images/SAL13.png">
 
-    2) Use the first command (`!heap -s -h <address>`) to examine the state of the heap that owns this block of memeory, as we used `HeapAlloc(...)` with the default heap's handle the address provided refers to the default heap. If we had allocated this on a heap we created at runtime using `HeapCreate(...)` this would not refer to the default heap, and instead contain an address referring to the one we created.
+    2) Use the first command (`!heap -s -h <address>`) to examine the state of the heap that owns this block of memory, as we used `HeapAlloc(...)` with the default heap's handle the address provided refers to the default heap. If we had allocated this on a heap we created at runtime using `HeapCreate(...)` this would not refer to the default heap, and instead contain an address referring to the one we created.
 
         <img src="Images/SAL14.png">
 
@@ -447,7 +447,7 @@ Repeat this with *Validate Heap Integrity Disabled* (If you already had it disab
 Finally we will examine the behavior of the Windows `ValidateHeap(...)` function that can be used to trigger the verification of the entire heap or a specific chunk. Additionally we will examine the behavior of the program when we are using `HeapFree(...)` or `free(...)` to release various chunks we have allocated after the overflow has occurred. This program is a slightly modified version of the first [Heap-Standalone](./SRC/Heap-Standalone/Heap-Standalone.sln) executable we first examined.
 
 > [!NOTE]
-> There is a flag that can be used on the heap [HEAP_VALIDATE_ALL](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/enable-heap-validation-on-call) that will make the heap functions validate the entire heap whenever a heap management function is called. It's use in general use programs and production environments is not suggested due to performance concerns.
+> There is a flag that can be used on the heap [HEAP_VALIDATE_ALL](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/enable-heap-validation-on-call) that will make the heap functions validate the entire heap whenever a heap management function is called. It's use in general-use programs and production environments is not suggested due to performance concerns.
 
 ### Validating The Entire Heap
 1. Disable *Validate Heap Integrity* as shown in previous section [Modifying Heap Validation Protections](#modifying-heap-validation-protections).
@@ -576,7 +576,7 @@ Finally we will examine the behavior of the Windows `ValidateHeap(...)` function
     <img src="Images/SAV4.png">
 
    * If we see the *evilcode* output, we should observe the results of validating the heap chunk associated with `v_allocs[0]` is *invalid* as we have overwritten it's metadata. **But No Exception was Raised**.
-6) If we attach this program to WinDBG and use the `wt` command to trace the execution of the call to `ValidateHeap(...)` for the validation of a single heap chunk less calls than before as we are only validating a single heap chunk.
+6) If we attach this program to WinDBG and use the `wt` command to trace the execution of the call to `ValidateHeap(...)` to validate a single heap chunk, we can see fewer calls than before, as we are only validating a single heap chunk.
 
     ```
     5     0 [  5]           ntdll!RtlRaiseException
@@ -664,13 +664,13 @@ Finally we will examine the behavior of the Windows `ValidateHeap(...)` function
 
     <img src="Images/SAV5.png">
 
-    * Notice how we are freeing a random chunk that is not adjacent to our overwritten chunk. This means the free is succesfull and we have not detected the overflow.
+    * Notice how we are freeing a random chunk that is not adjacent to our overwritten chunk. This means the free is successful, and we have not detected the overflow.
 5) Now, we can change the **HEAP_CHUNK** value to be the chunk we overwrote by setting it to `0`. Run the program and observe the output.
 
     <img src="Images/SAV6.png">
 
    * Notice that since we are freeing an invalid chunk the overflow that corrupted the metadata was detected.
-6) Now we should change the `VALLOC_CHECK` defintion from `1` to `0` so we start freeing the `allocations` array rather than the one containing the function pointer. This way we can observe the behavior of freeing an adjacent block. We will also need to modify the `HEAP_CHUNK` value to be `5` or `7`. When we are compiling in *Debugging mode* the process tends to hang and get stuck, whereas if we compile for *Release* the heap overflow is detected.
+6) Now we should change the `VALLOC_CHECK` definition from `1` to `0` so we start freeing the `allocations` array rather than the one containing the function pointer. This way we can observe the behavior of freeing an adjacent block. We will also need to modify the `HEAP_CHUNK` value to be `5` or `7`. When we are compiling in *Debugging mode* the process tends to hang and get stuck, whereas if we compile for *Release* the heap overflow is detected.
 
     <img src="Images/SAV7.png">
 
@@ -803,7 +803,7 @@ None of them are protected since we never free when successfully altering the fl
 
 [[9] ANALYSIS OF HEAP MANAGER FOR WINDOWS 7 & 10 FROM AN EXPLOITATION PERSPECTIVE ](https://ijecm.co.uk/wp-content/uploads/2021/05/9514.pdf)
 
-[[10] https://www.blackhat.com/presentations/bh-usa-06/BH-US-06-Marinescu.pdf](https://www.blackhat.com/presentations/bh-usa-06/BH-US-06-Marinescu.pdf)
+[[10] Windows Vista Heap Management Enhancements](https://www.blackhat.com/presentations/bh-usa-06/BH-US-06-Marinescu.pdf)
 
 <!--
 WinDBG
