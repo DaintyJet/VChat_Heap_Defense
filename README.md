@@ -1,4 +1,6 @@
 # Validate Heap Integrity
+*Notice*: Originally based off notes from [llan-OuO](https://github.com/llan-OuO).
+---
 > Terminates a process when heap corruption is detected. - Microsoft
 
 
