@@ -222,7 +222,7 @@ We will first examine the behavior of the standalone program when *Validate Heap
 
 9. Run the Project a few times. This should most of the time, produce the following output. Occasionally the program will fail due to corrupting internal heap structures.
 
-    <video controls src="Videos/Stand-1.mp4" title="Title"></video>
+    https://github.com/user-attachments/assets/e84c466b-536b-40c7-bad5-1fdbb3d0c617
 
     * Still Image:
 
