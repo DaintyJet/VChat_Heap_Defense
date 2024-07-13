@@ -112,6 +112,15 @@ In addition to behavioral changes, Windows also performs a number of modificatio
   * `Maximally Sized Subsegments`: A heap segment may contain one or more subsegments used by the LFH, after a threshold is triggered *maximally sized subsegments* will be allocated to the LFH containing the maximum number of blocks for a given size. Each *maximally sized subsegment* will have a trailing guard page allocated.
 
 
+## Windows Heap Protection Flags
+This section contains various flags that can be applied to a Windows heap structure, they are discussed in the [Global Flag Reference](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/global-flag-reference) documentation. We will briefly discuss the flags used to control the validation of heap chunks; we will not focus on all of the flags in this reference document as most do not pertain to the heap and some are used more for debugging like the [Enable Heap Tagging](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/enable-heap-tagging?source=recommendations) flag. You can modify the heap flags on a program using the *Global Flags Editor*, [GFlags](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/gflags-commands) program.
+
+* [`FLG_HEAP_ENABLE_FREE_CHECK`](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/enable-heap-free-checking?source=recommendations): When this flag is enabled, the program will validate each heap allocation when that allocation is freed. This is enabled by default, and can be modified using the *GFlags* program with the `/p /disabled` flags pared with the *FLG_HEAP_ENABLE_FREE_CHECK* value.
+* [`FLG_HEAP_ENABLE_TAIL_CHECK`](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/enable-heap-tail-checking): As with the previous *FLG_HEAP_ENABLE_FREE_CHECK* flag this is used to control the verification of heap chunks when they are freed. When this is enabled a short pattern is added to the end of the heap chunk when it is allocated by the heap manager. This value will then be verified when the heap chunk is freed, and if it has been modified an overflow occurred.
+* [`FLG_HEAP_VALIDATE_ALL`](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/enable-heap-validation-on-call?source=recommendations): When this flag is enabled, the entire heap, that is all of the internal heap structures and chunks are validated *for each heap management function call*. Microsoft suggests that this flag not be used unless you are debugging a program that suffers from random corruptions as in a production environment this incurs significant overhead. If you need to validate a heap, Microsoft suggests the [`HeapValidate`](https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapvalidate) function.
+* [`FLG_HEAP_VALIDATE_PARAMETERS`](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/enable-heap-parameter-checking?source=recommendations): Per Microsoft when this flag is enabled "selected" aspects of the heap are verified. They do not have clear documentation on this flag.
+* [`FLG_HEAP_PAGE_ALLOCS`](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/enable-page-heap?source=recommendations): When this flag is enabled, certain measures will be implemented to validate the integrity of a heap entry when allocation or free operations are preformed. There are two options, the *Full Page Heap Verification* option controls the placement of "reserved virtual memory" like guard pages at the end of each allocation preformed, and the *Standard Page Heap Verification* which uses the strategy discussed with the *FLG_HEAP_ENABLE_TAIL_CHECK* flag to validate chunks when they are freed.
+
 
 ## Windows Validate Heap Integrity Option
 This setting in the Windows Operating System controls some of the strategies discussed previously in the [Windows Heap Corruption Mitigation Strategies](#windows-heap-corruption-mitigations-strategies) section. It should be noted that it **does not** control all of the protections Windows implements! The majority of the aforementioned protections are enabled by default and are not immediately available to the user for configuration. Below are the mitigation controller by the *Validate Heap Integrity* option as described in [4] the *Exploit Protection Reference* from Windows.
@@ -804,6 +813,8 @@ None of them are protected since we never free when successfully altering the fl
 [[9] ANALYSIS OF HEAP MANAGER FOR WINDOWS 7 & 10 FROM AN EXPLOITATION PERSPECTIVE ](https://ijecm.co.uk/wp-content/uploads/2021/05/9514.pdf)
 
 [[10] Windows Vista Heap Management Enhancements](https://www.blackhat.com/presentations/bh-usa-06/BH-US-06-Marinescu.pdf)
+
+[[12] GFlag Commands](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/gflags-commands)
 
 <!--
 WinDBG
