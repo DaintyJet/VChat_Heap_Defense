@@ -11,7 +11,7 @@ The *Validate Heap Integrity* exploit mitigation in Windows is a system-level mi
 
 The structure of a heap in the Windows operating system follows that of most modern systems. That is, when we make a call with the `malloc(...)` or the Windows-specific `HeapAlloc(...)` functions, we will be returned an address that points to data contained in a *heap chunk*. The allocation of a *heap chunk* depends on a number of factors, but it should be noted that the chunk we were allocated was either allocated as a whole to us, or was once a part of a larger chunk which has been fragmented to create a smaller series of *heap chunks* for our use. Generally a heap manager such as the one used in Windows will apply various strategies to limit the fragmentation of the heap - these strategies are often guided by *heuristics*.
 
-The Windows heap manager is separated into a *Front-End* and a *Back-End*, We first interact with the Back-End allocator by default until our operations trigger the heuristics and we are switched to use the Front-End allocator. Specifically, once we make 18 or more allocations of the same size (*Less than 16kb each*) we will be switched over to the Front-End allocator which is commonly called a *Low Fragmentation Heap* (LFH) whose allocations are a part of a large heap chunk allocated to the Front-End by the Back-End allocator. This chunk is then made into a seres of smaller blocks managed by the Front-End allocator, these smaller blocks are organized into *buckets* and those blocks in the bucket are not assigned in a linear fashion and their addresses may not be contiguous in nature so it is much harder to predict where or if there will be adjacent blocks allocated to our program. Exploits utilizing the Windows heap, therefore, try to avoid triggering the LFH as they want to reliably overflow or access an *adjacent chunk* to the one they control.
+The Windows heap manager is separated into a *Front-End* and a *Back-End*, We first interact with the Back-End allocator by default until our operations trigger the heuristics and we are switched to use the Front-End allocator. Specifically, once we make 18 or more allocations of the same size (*Less than 16kb each*) we will be switched over to the Front-End allocator which is commonly called a *Low Fragmentation Heap* (LFH) whose allocations are a part of a large heap chunk allocated to the Front-End by the Back-End allocator. This chunk is then made into a series of smaller blocks managed by the Front-End allocator, these smaller blocks are organized into *buckets* and those blocks in the bucket are not assigned in a linear fashion and their addresses may not be contiguous in nature so it is much harder to predict where or if there will be adjacent blocks allocated to our program. Exploits utilizing the Windows heap, therefore, try to avoid triggering the LFH as they want to reliably overflow or access an *adjacent chunk* to the one they control.
 
 The metadata of a heap chunk is used by the heap manager during the normal management operations on the heap - one notable use is during a `free(...)` operation where adjacent chunks may be coalesced to reduce fragmentation. We are not particularly concerned with the contents of the metadata in the heap chunk, but we do need to keep in mind this header is stored on the heap at the head of it's associated data chunk.
 
@@ -81,6 +81,38 @@ This means we will have a Heap with the following (simplified) structure of entr
 > The entries in the heap may or may not be adjacent. Additionally, they may not be arranged in a linear order if multiple allocations are made in a row if this is executing in a multithreaded process.
 >
 > If we are going to overflow a heap chunk to overwrite one that is adjacent to it, we will need to overflow that chunk's `_HEAP_ENTRY` structure, which contains the *checksum* that is in the *SmallTagIndex*.
+
+## Attacker's Goal
+In order to understand why these defenses are necessary, and why they have been implemented in this manner we will provide a quick reminder and overview of how heap overflows work, what the attackers control and some of the reasons an attacker may need to act the way they do.
+
+### Heap Manipulation
+The first thing an attacker is required to do, is induce the heap into a vulnerable state. This is commonly referred to as *heap massaging* or *heap grooming*, as most of the time our target heap is not going to be in a known state and the allocations are unlikely to be made in a deterministic manner. This is because if the LFH is triggered the allocated blocks from th buckets are not chosen in a linear manner as mentioned previously, and over the course of a processes lifetime the heap chunks are allocated and freed. Leading to a fragmented heap where free blocks are not necessarily adjacent to one another. This means the first step in an attack that exploits the heap, is taking the heap from an unknown state, to one that likely contains adjacent free chunks that can be overflowed.
+
+This means, the attacker will generally preform a series of allocations in the backend heap allocator. This can be done to fill up the current heap segment and make the system allocate a new heap segment, or to fill the holes between allocated chunks in a segment of the heap.
+
+For example, if we attempted to exploit a heap that is in a *bad* state, with pre-existing allocations from the process that we do not control we may not be able to overflow chunks an induce the behavior we would like. As we cannot predict what the chunk we are overflowing is used for, if it will be freed or even what it may contain. 
+
+<img src="Images/Bad-Heap.png">
+
+This is why you will see real exploits preform a number of allocations, this could be done by using a library in a specific manner, connecting to a server a number of times, or sending specially crafted messages. This is done to put the heap into a state where it is most-likely going to be possible for us to overflow a chunk we control for more reliable exploits - though this not always reliable [13].
+
+<img src="Images/Better-Heap.png">
+
+> [!NOTE]
+> We will be using the above image as a reference, for simplicity we will be assuming the heap allocations a filled from left to right in order as annotate. This may not be the case in a real-world scenario.
+
+In this example, we perform a series of three allocations to fill the current *holes* in the heap. We may not need to fill all the holes but only those of the size we are requesting to make a new heap segment get allocated or to start breaking up a larger free block. For this example, after the first three allocations the next three are *adjacent* as they are being allocated from a large free block being segmented or are allocated in a new heap segment. 
+### Heap Overflows
+There are a number of possible attacks on a heap object, from overwriting data directly, preforming a use-after free exploit, or even just preforming overflows within a heap chunk (structured data) [13]. We are focusing on overflowing adjacent chunks to overwrite data, hence the previous subsection focusing on the layout of the heap and why we will be freeing one of those allocated chunks as part of the overflow in our example.
+
+First we have preformed a series of allocation to put the heap into a state where we the  *attacker* control adjacent chunks.
+
+<img src="Images/H1.png">
+
+The heap grows from a *low address* to a *high address*, and when we write to the heap chunk we are writing from a *low* to *high* address as well. This means when we preform the overflow the *deeper* chunk we are overwriting needs to already exist which is unlikely if we are allocating from a new segment or are fragmenting a large free chunk as the allocations will be from the start of the chunk rather than the middle or end. This is why we free a chunk we already control and preform an allocation of the *same* size, this is so we reuse the space from the recently freed chunk and can now overflow in the in-use chunk we control that is adjacent to it. This is all shown in the example image below.
+
+<img src="Images/H2.png">
+
 ## Windows Heap Corruption Mitigation Strategies
 Windows has made a number of modifications to the `_HEAP_CHUNK` structure to enable the Windows Operating System to prevent and detect when entries on the heap have been corrupted. Additionally, Windows has implemented some limitations to possible operations on the heap.
 
@@ -816,6 +848,7 @@ None of them are protected since we never free when successfully altering the fl
 
 [[12] GFlag Commands](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/gflags-commands)
 
+[[13] What is a "good" memory corruption vulnerability?](https://googleprojectzero.blogspot.com/2015/06/what-is-good-memory-corruption.html)
 <!--
 WinDBG
 1. https://learn.microsoft.com/en-us/windows-hardware/drivers/debuggercmds/-heap
@@ -830,4 +863,6 @@ https://brant-ruan.github.io/images/0day/54473267732EFADF62E7A8E13D2F0F7F.pdf //
 
 
 https://learn.microsoft.com/en-us/windows/win32/memory/reserving-and-committing-memory // May be useful in explaining Reserved vs Committed memory.
+
+https://fuzzysecurity.com/tutorials/mr_me/3.html
 -->
