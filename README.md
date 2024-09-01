@@ -823,6 +823,16 @@ Finally we will examine the behavior of the Windows `ValidateHeap(...)` function
 
     ```
     * This is a successful free.
+
+## VChat Exploration
+With the VChat process we will now examine it's behavior with Validate Heap Integrity *enabled*, we used a slightly roundabout method to enable the shellcode to run properly. As they would call functions which would validate the processes heap, to enable it's exploitation we preformed the allocations on a user-created heap. You can explore the behavior of the Validate Heap Integrity protections when the allocations are preformed on the default heap of the process, and the user created heap.
+
+We control this with a preprocessor define directive in the `vchat.h` header file. If the line `#define HEAPVULN` is uncommented we will prefrom allocations on a user-created heap. Otherwise if this is uncommented (or deleted) the allocations will be done on the procecss's default heap.
+
+<img src="Images/PreProc.png">
+
+The process for exploiting the Heap functions in the VChat server are discussed in the [VChat_Heap_Exploit](https://github.com/DaintyJet/VChat_Heap_Exploit) writeup.
+
 <!-- ## Heap Exploration: VChat
 None of them are protected since we never free when successfully altering the flow of execution... -->
 ## References
